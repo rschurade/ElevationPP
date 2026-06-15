@@ -24,7 +24,12 @@ internal class ElevatedStationData : IModData
     public void RegisterData(ProtoRegistrator registrator)
     {
         ProtosDb db = registrator.PrototypesDb;
+        RegisterRoot(registrator, db);
+        RegisterUnitModule(registrator, db);
+    }
 
+    private static void RegisterUnitModule(ProtoRegistrator registrator, ProtosDb db)
+    {
         if (!db.TryGetProto<TrainStationModuleProto>(Ids.TrainTracks.TrainStationUnit, out var vanilla))
         {
             Log.Error("Elevation++: vanilla unit station proto not found; elevated station not registered.");
@@ -70,6 +75,50 @@ internal class ElevatedStationData : IModData
 
         db.Add(proto);
         Log.Info("Elevation++: registered elevated unit station.");
+    }
+
+    /// <summary>
+    /// Registers the elevated root station — the base building that loading modules attach to. Same
+    /// approach as the module: elevated trajectory, widened placement range, UsingPillar footprint,
+    /// reusing the vanilla root model/costs.
+    /// </summary>
+    private static void RegisterRoot(ProtoRegistrator registrator, ProtosDb db)
+    {
+        if (!db.TryGetProto<TrainStationRootProto>(Ids.TrainTracks.TrainStationRoot, out var vanilla))
+        {
+            Log.Error("Elevation++: vanilla root station proto not found; elevated root not registered.");
+            return;
+        }
+
+        // Root uses a shorter (2-tile) track curve than the loading modules.
+        var curve = new CubicBezierCurve2f(ImmutableArray.Create(
+            new Vector2f(0, 0), new Vector2f(1, 0), new Vector2f(1, 0), new Vector2f(2, 0)));
+        var trackOffset = new RelTile2f(0, -2);
+        if (!TrainTrackTrajectoryData.TryCreateFromCurve(0, curve, isElevated: true,
+                registrator.LayoutParser.SomeOption(), out var trajectory, out _, out var error,
+                default(ThicknessTilesF), default(ThicknessTilesF), TrainTrackGradeFactor.G0,
+                TrainTrackGradeFactor.G0, null, null, trackOffset, default(RelTile2f), null, false))
+        {
+            Log.Error("Elevation++: failed to create elevated root trajectory: " + error);
+            return;
+        }
+
+        EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
+            new EntityLayoutParams(
+                customPlacementRange: new ThicknessIRange(0, 16),
+                tokenPostProcesssor: toUsingPillar),
+            "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]");
+
+        var id = new StaticEntityProto.ID("ElevationPP_TrainStationRootElevated");
+        Proto.Str strings = Proto.CreateStr(id, "Elevated Train Station",
+            "Base building for an elevated train station. Add elevated loading modules next to it on elevated track.");
+
+        var proto = new ElevatedStationRootProto(
+            id, strings, layout, vanilla.Costs, trajectory, vanilla.PowerConsumption, vanilla.Graphics,
+            null, null, null, cannotBeReflected: false, isElectrified: false);
+
+        db.Add(proto);
+        Log.Info("Elevation++: registered elevated train station (root).");
     }
 
     /// <summary>
