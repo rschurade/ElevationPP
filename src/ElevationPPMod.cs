@@ -98,6 +98,17 @@ public sealed class ElevationPPMod : IMod
         {
             Log.Error($"Elevation++: Failed to apply pillar render patch: {ex.Message}");
         }
+
+        // Lets a placed elevated station be electrified in-place (the vanilla "Electrify track"
+        // tool otherwise reports "Collision with pillar" against the station's own support pillars).
+        try
+        {
+            Stations.ElevatedStationCollisionPatch.TryApply();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Elevation++: Failed to apply elevated station electrification patch: {ex.Message}");
+        }
     }
 
     public void MigrateJsonConfig(VersionSlim savedVersion, Dict<string, object> savedValues) { }

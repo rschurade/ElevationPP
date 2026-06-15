@@ -52,13 +52,6 @@ internal class ElevatedStationData : IModData
             Log.Error("Elevation++: Trains toolbar category not found; elevated stations have no tab.");
         }
 
-        TrainTrackTrajectoryData rootTraj = makeElevatedTrajectory(registrator,
-            new Vector2f(0, 0), new Vector2f(1, 0), new Vector2f(1, 0), new Vector2f(2, 0), new RelTile2f(0, -2));
-        if (rootTraj == null)
-        {
-            return;
-        }
-
         // Map each vanilla station proto to the research node that unlocks it, so each elevated
         // clone can be gated behind the same research instead of being available from game start.
         var protoToNode = new Dictionary<IProto, ResearchNodeProto>();
@@ -79,7 +72,7 @@ internal class ElevatedStationData : IModData
 
         foreach (TrainStationModuleProto v in new List<TrainStationModuleProto>(db.All<TrainStationModuleProto>()))
         {
-            if (v is ElevatedStationModuleProto)
+            if (v is ElevatedStationModuleProto || v.IsObsolete)
             {
                 continue;
             }
@@ -99,12 +92,12 @@ internal class ElevatedStationData : IModData
 
         foreach (TrainStationRootProto v in new List<TrainStationRootProto>(db.All<TrainStationRootProto>()))
         {
-            if (v is ElevatedStationRootProto)
+            if (v is ElevatedStationRootProto || v.IsObsolete)
             {
                 continue;
             }
             protoToNode.TryGetValue(v, out var node);
-            Proto p = registerElevatedRoot(registrator, db, v, rootTraj, node);
+            Proto p = registerElevatedRoot(registrator, db, v, node);
             if (p == null)
             {
                 continue;
@@ -115,7 +108,7 @@ internal class ElevatedStationData : IModData
 
         foreach (TrainStationFuelProto v in new List<TrainStationFuelProto>(db.All<TrainStationFuelProto>()))
         {
-            if (v is ElevatedStationFuelProto)
+            if (v is ElevatedStationFuelProto || v.IsObsolete)
             {
                 continue;
             }
@@ -181,7 +174,7 @@ internal class ElevatedStationData : IModData
         int w = v.Layout.LayoutSize.X;
         TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
             new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0),
-            trackOffsetFor(v));
+            trackOffsetFor(v), v.ElectrificationType != ElectrificationType.None);
         if (trajectory == null)
         {
             return null;
@@ -205,10 +198,19 @@ internal class ElevatedStationData : IModData
     }
 
     private Proto registerElevatedRoot(ProtoRegistrator registrator, ProtosDb db, TrainStationRootProto v,
-        TrainTrackTrajectoryData trajectory, ResearchNodeProto unlockedBy)
+        ResearchNodeProto unlockedBy)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
         Proto.Str strings = Proto.CreateStrFromLocalized(id, ELEVATED_PREFIX.Format(v.Strings.Name), v.Strings.DescShort);
+        bool electrified = v.ElectrificationType != ElectrificationType.None;
+        // Build per-variant so the electrified root gets a catenary-carrying (poled) trajectory.
+        TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
+            new Vector2f(0, 0), new Vector2f(1, 0), new Vector2f(1, 0), new Vector2f(2, 0),
+            new RelTile2f(0, -2), electrified);
+        if (trajectory == null)
+        {
+            return null;
+        }
         EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
             new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
                 tokenPostProcesssor: toUsingPillar),
@@ -217,7 +219,6 @@ internal class ElevatedStationData : IModData
         // normal Stations tab where "Train station" comes first.
         var categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, 100);
         var gfx = (EntityWithTrainTrackBaseProto.Gfx)cloneGfxWithCategory(v.Graphics, vanillaIconPath(v), categoryArray);
-        bool electrified = v.ElectrificationType != ElectrificationType.None;
 
         var proto = new ElevatedStationRootProto(
             id, strings, layout, v.Costs, trajectory, v.PowerConsumption, gfx,
@@ -234,7 +235,7 @@ internal class ElevatedStationData : IModData
         int w = v.Layout.LayoutSize.X;
         TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
             new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0),
-            trackOffsetFor(v));
+            trackOffsetFor(v), v.ElectrificationType != ElectrificationType.None);
         if (trajectory == null)
         {
             return null;
@@ -341,13 +342,15 @@ internal class ElevatedStationData : IModData
     }
 
     private TrainTrackTrajectoryData makeElevatedTrajectory(ProtoRegistrator registrator,
-        Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3, RelTile2f trackOffset)
+        Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3, RelTile2f trackOffset, bool electrified)
     {
         var curve = new CubicBezierCurve2f(ImmutableArray.Create(p0, p1, p2, p3));
+        // The `electrified` flag bakes the catenary/pole support data into the trajectory; without it
+        // an electrified clone would swap to the electrified model but never grow catenary poles.
         if (!TrainTrackTrajectoryData.TryCreateFromCurve(0, curve, isElevated: true,
                 registrator.LayoutParser.SomeOption(), out var traj, out _, out var error,
                 default(ThicknessTilesF), default(ThicknessTilesF), TrainTrackGradeFactor.G0,
-                TrainTrackGradeFactor.G0, null, null, trackOffset, default(RelTile2f), null, false))
+                TrainTrackGradeFactor.G0, null, null, trackOffset, default(RelTile2f), null, electrified))
         {
             Log.Error("Elevation++: failed to create elevated station trajectory: " + error);
             return null;

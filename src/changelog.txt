@@ -1,9 +1,29 @@
 Elevation++ — Changelog
 ================================
 
-v1.0.0
+v0.9.0
 ------
-Initial release (formerly "Elevated Rails Plus", now extended to pipes
+Elevated train stations:
+- Every train station can now be built elevated on auto-rendered
+  support pillars: the root, all cargo modules (unit, loose, fluid,
+  molten, empty) and fuel modules (coal, liquid, nuclear), for both
+  normal and electrified rail.
+- They live in a dedicated "Elevated stations" toolbar tab, grouped
+  and ordered like the vanilla Stations menu (root first, molten last),
+  reuse the vanilla icons, and unlock with the same research as their
+  ground counterparts.
+- Obsolete / save-compatibility-only station protos (e.g. the legacy
+  standalone hydrogen fuel module) are skipped, matching the vanilla
+  menu.
+- A non-electrified elevated station can be converted in place with the
+  vanilla "Electrify track" tool, just like a ground station (previously
+  the tool reported "Collision with pillar" against the station's own
+  support pillars, or silently failed at elevation).
+- Electrified elevated stations grow their catenary support masts on the
+  platform like normal stations (the masts would otherwise be rejected
+  for sitting on the station's own footprint / support pillars).
+
+Pillar limits (formerly "Elevated Rails Plus", now extended to pipes
 and belts):
 
 Train tracks (rails):
