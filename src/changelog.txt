@@ -1,6 +1,15 @@
 Elevation++ — Changelog
 ================================
 
+v0.9.1
+------
+- The auto-built support pillars under elevated stations now render as a
+  hollow ring around the outer edge of the footprint instead of a solid
+  block beneath the whole building. Interior tiles carry no pillar (and
+  need none — the deck rests on the ring of edge pillars). The rule is
+  shape-aware, so thin modules stay fully pillared and the wide
+  molten/nuclear footprints get a proper outline.
+
 v0.9.0
 ------
 Elevated train stations:

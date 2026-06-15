@@ -179,10 +179,7 @@ internal class ElevatedStationData : IModData
         {
             return null;
         }
-        EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
-            new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
-                tokenPostProcesssor: toUsingPillar),
-            footprintRows(v.Layout, () => moduleFootprint(v)));
+        EntityLayout layout = parseHollowFootprint(registrator, footprintRows(v.Layout, () => moduleFootprint(v)));
         // Mirror the module's order from the normal Stations tab; keep molten last as requested
         // (its DLC toolbar order otherwise lands it near the front).
         int order = v.Id.ToString().Contains("Molten") ? 200 : vanillaOrder(v.Graphics.Categories, 115);
@@ -211,9 +208,7 @@ internal class ElevatedStationData : IModData
         {
             return null;
         }
-        EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
-            new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
-                tokenPostProcesssor: toUsingPillar),
+        EntityLayout layout = parseHollowFootprint(registrator,
             "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]");
         // Root is the base building; keep it leftmost (lower order than any module), like the
         // normal Stations tab where "Train station" comes first.
@@ -240,10 +235,7 @@ internal class ElevatedStationData : IModData
         {
             return null;
         }
-        EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
-            new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
-                tokenPostProcesssor: toUsingPillar),
-            footprintRows(v.Layout, () => fillGrid(w, 7)));
+        EntityLayout layout = parseHollowFootprint(registrator, footprintRows(v.Layout, () => fillGrid(w, 7)));
         var categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, vanillaOrder(v.Graphics.Categories, 120));
         var gfx = (TrainStationFuelProto.Gfx)cloneGfxWithCategory(v.Graphics, vanillaIconPath(v), categoryArray);
         bool electrified = v.ElectrificationType != ElectrificationType.None;
@@ -423,16 +415,50 @@ internal class ElevatedStationData : IModData
     }
 
     /// <summary>
-    /// Converts each non-port footprint tile from a ground-anchored tile to a UsingPillar tile
-    /// (dropping the terrain-height constraint that triggers "terrain too low" when raised).
+    /// Parses a station footprint and renders the auto-built support pillars as a hollow ring around
+    /// the OUTSIDE edge only, instead of a solid block under the whole building.
+    ///
+    /// Each footprint tile would normally be ground-anchored (which triggers "terrain too low" when
+    /// raised). A tile on the boundary — one with at least one orthogonal neighbour that is not part
+    /// of the footprint — is given <see cref="LayoutTileConstraint.UsingPillar"/> so it gets a
+    /// transport pillar; an interior tile is given <see cref="LayoutTileConstraint.None"/>, which the
+    /// elevated-placement validator skips entirely (no pillar, no terrain anchor), so the deck simply
+    /// floats on the ring of edge pillars. Ports keep their original spec.
+    ///
+    /// A first pass collects the footprint tiles so the second pass can tell edge from interior. This
+    /// boundary rule works for any shape (thin footprints stay fully pillared; ports carved out of the
+    /// footprint turn their neighbours into edges), not just solid rectangles.
     /// </summary>
-    private static LayoutTokenSpec toUsingPillar(RelTile2i coord, LayoutTokenSpec spec)
+    private static EntityLayout parseHollowFootprint(ProtoRegistrator registrator, params string[] rows)
     {
-        if (spec.IsPort)
-        {
-            return spec;
-        }
-        return new LayoutTokenSpec(spec.HeightFrom.Value, spec.HeightToExcl.Value,
-            LayoutTileConstraint.UsingPillar);
+        var footprint = new HashSet<(int, int)>();
+        registrator.LayoutParser.ParseLayoutOrThrow(
+            new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
+                tokenPostProcesssor: (RelTile2i coord, LayoutTokenSpec spec) =>
+                {
+                    if (!spec.IsPort)
+                    {
+                        footprint.Add((coord.X, coord.Y));
+                    }
+                    return spec;
+                }),
+            rows);
+
+        return registrator.LayoutParser.ParseLayoutOrThrow(
+            new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
+                tokenPostProcesssor: (RelTile2i coord, LayoutTokenSpec spec) =>
+                {
+                    if (spec.IsPort)
+                    {
+                        return spec;
+                    }
+                    bool edge = !footprint.Contains((coord.X + 1, coord.Y))
+                        || !footprint.Contains((coord.X - 1, coord.Y))
+                        || !footprint.Contains((coord.X, coord.Y + 1))
+                        || !footprint.Contains((coord.X, coord.Y - 1));
+                    return new LayoutTokenSpec(spec.HeightFrom.Value, spec.HeightToExcl.Value,
+                        edge ? LayoutTileConstraint.UsingPillar : LayoutTileConstraint.None);
+                }),
+            rows);
     }
 }
