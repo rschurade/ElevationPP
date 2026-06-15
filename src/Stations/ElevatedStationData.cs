@@ -136,8 +136,10 @@ internal class ElevatedStationData : IModData
             new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
                 tokenPostProcesssor: toUsingPillar),
             moduleFootprint(v));
-        // Mirror the module's order from the normal Stations tab so the elevated tab matches it.
-        var categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, vanillaOrder(v.Graphics.Categories, 115));
+        // Mirror the module's order from the normal Stations tab; keep molten last as requested
+        // (its DLC toolbar order otherwise lands it near the front).
+        int order = v.Id.ToString().Contains("Molten") ? 200 : vanillaOrder(v.Graphics.Categories, 115);
+        var categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, order);
         var gfx = (TrainStationModuleProto.Gfx)cloneGfxWithCategory(v.Graphics, vanillaIconPath(v), categoryArray);
         bool electrified = v.ElectrificationType != ElectrificationType.None;
 
@@ -252,7 +254,7 @@ internal class ElevatedStationData : IModData
     {
         for (Type t = type; t != null; t = t.BaseType)
         {
-            FieldInfo f = t.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
+            FieldInfo f = t.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             if (f != null)
             {
                 f.SetValue(target, value);
