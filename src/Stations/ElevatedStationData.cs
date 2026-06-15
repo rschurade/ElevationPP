@@ -12,7 +12,9 @@ using Mafi.Core.Entities.Static.Layout;
 using Mafi.Core.Mods;
 using Mafi.Core.Products;
 using Mafi.Core.Prototypes;
+using Mafi.Core.Research;
 using Mafi.Core.Trains;
+using Mafi.Core.UnlockingTree;
 using Mafi.Localization;
 using Mafi.Base.Prototypes.Trains;
 
@@ -57,6 +59,17 @@ internal class ElevatedStationData : IModData
             return;
         }
 
+        // Map each vanilla station proto to the research node that unlocks it, so each elevated
+        // clone can be gated behind the same research instead of being available from game start.
+        var protoToNode = new Dictionary<IProto, ResearchNodeProto>();
+        foreach (ResearchNodeProto node in db.All<ResearchNodeProto>())
+        {
+            foreach (IProto unlocked in ProtoUnlock.GetUnlockedProtos(node.Units.AsEnumerable()))
+            {
+                protoToNode[unlocked] = node;
+            }
+        }
+
         // 2. Clone every cargo module and root. Collect by group so normal/electrified variants of a
         //    type can be combined into one toolbar slot afterwards.
         var moduleGroups = new Dictionary<ProductType, List<Proto>>();
@@ -69,7 +82,8 @@ internal class ElevatedStationData : IModData
             {
                 continue;
             }
-            Proto p = registerElevatedModule(registrator, db, v);
+            protoToNode.TryGetValue(v, out var node);
+            Proto p = registerElevatedModule(registrator, db, v, node);
             if (p == null)
             {
                 continue;
@@ -88,7 +102,8 @@ internal class ElevatedStationData : IModData
             {
                 continue;
             }
-            Proto p = registerElevatedRoot(registrator, db, v, rootTraj);
+            protoToNode.TryGetValue(v, out var node);
+            Proto p = registerElevatedRoot(registrator, db, v, rootTraj, node);
             if (p == null)
             {
                 continue;
@@ -125,7 +140,8 @@ internal class ElevatedStationData : IModData
         }
     }
 
-    private Proto registerElevatedModule(ProtoRegistrator registrator, ProtosDb db, TrainStationModuleProto v)
+    private Proto registerElevatedModule(ProtoRegistrator registrator, ProtosDb db, TrainStationModuleProto v,
+        ResearchNodeProto unlockedBy)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
         Proto.Str strings = Proto.CreateStrFromLocalized(id, ELEVATED_PREFIX.Format(v.Strings.Name), v.Strings.DescShort);
@@ -155,11 +171,11 @@ internal class ElevatedStationData : IModData
             id, strings, layout, v.Costs, trajectory, v.ProductType, v.Capacity, v.TransferPeriod,
             v.TransferQuantity, v.ConnectionCompletionPerStepWhenLoading, v.PowerConsumption,
             ((IProtoWithAnimation)v).AnimationParams, gfx, null, null, null, cannotBeReflected: false, null, electrified);
-        return db.Add(proto);
+        return addGated(db, proto, unlockedBy);
     }
 
     private Proto registerElevatedRoot(ProtoRegistrator registrator, ProtosDb db, TrainStationRootProto v,
-        TrainTrackTrajectoryData trajectory)
+        TrainTrackTrajectoryData trajectory, ResearchNodeProto unlockedBy)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
         Proto.Str strings = Proto.CreateStrFromLocalized(id, ELEVATED_PREFIX.Format(v.Strings.Name), v.Strings.DescShort);
@@ -176,7 +192,22 @@ internal class ElevatedStationData : IModData
         var proto = new ElevatedStationRootProto(
             id, strings, layout, v.Costs, trajectory, v.PowerConsumption, gfx,
             null, null, null, cannotBeReflected: false, electrified);
-        return db.Add(proto);
+        return addGated(db, proto, unlockedBy);
+    }
+
+    /// <summary>
+    /// Adds the proto. If a research node unlocks the source station, lock the elevated clone on
+    /// init and unlock it with that same node (hidden in the research UI to avoid duplicate icons).
+    /// If no node is found, leave it unlocked so it never becomes permanently unbuildable.
+    /// </summary>
+    private static Proto addGated(ProtosDb db, Proto proto, ResearchNodeProto unlockedBy)
+    {
+        Proto added = db.Add(proto, lockOnInit: unlockedBy != null);
+        if (unlockedBy != null)
+        {
+            unlockedBy.AddProtoToUnlock((IProtoWithIcon)added, hideInUi: true);
+        }
+        return added;
     }
 
     /// <summary>
