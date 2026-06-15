@@ -206,6 +206,11 @@ internal class ElevatedStationData : IModData
         if (unlockedBy != null)
         {
             unlockedBy.AddProtoToUnlock((IProtoWithIcon)added, hideInUi: true);
+            Log.Info($"Elevation++: '{proto.Id}' unlocks with research '{unlockedBy.Id}'.");
+        }
+        else
+        {
+            Log.Warning($"Elevation++: '{proto.Id}' has no unlocking research; left always-available.");
         }
         return added;
     }
