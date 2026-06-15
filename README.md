@@ -60,4 +60,4 @@ Roest
 
 ## License
 
-Captain of Industry Open Modding License (CoI-Open).
+[Captain of Industry Open License (COI-Open) v1.0](LICENSE) — see https://www.captain-of-industry.com/coi-open. The Work may only be used in connection with Captain of Industry, derivatives must stay under this license, and the original author must be credited.
