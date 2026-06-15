@@ -158,11 +158,11 @@ internal class ElevatedStationData : IModData
         {
             return;
         }
-        // Non-electrified first (tier I), electrified after (tier II). Link them into a tier chain
-        // — each higher tier's "next tier" is the one below — which is what makes the toolbar show
-        // them combined under one slot with the variants in the popup (same as the vanilla Stations
-        // tab). SetNextTier points from the higher tier down to the lower one.
-        group.Sort((a, b) => isElectrified[a].CompareTo(isElectrified[b]));
+        // Link the variants into a tier chain so the toolbar combines them under one slot with the
+        // others in the popup (same as the vanilla Stations tab). The chain head (the proto that
+        // calls SetNextTier) shows as tier I, so put the non-electrified variant first there and the
+        // electrified one after — matching the normal menu (I = non-electrified, II = electrified).
+        group.Sort((a, b) => isElectrified[b].CompareTo(isElectrified[a]));
         for (int i = 1; i < group.Count; i++)
         {
             ((IProtoWithUpgrade)group[i]).SetNextTier((IProtoWithUpgrade)group[i - 1]);
