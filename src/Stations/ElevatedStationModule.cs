@@ -6,6 +6,7 @@ using Mafi.Collections.ImmutableCollections;
 using Mafi.Collections.ReadonlyCollections;
 using Mafi.Core.Entities;
 using Mafi.Core.Entities.Animations;
+using Mafi.Core.Entities.Static;
 using Mafi.Core.Trains;
 using Mafi.Base.Prototypes.Trains;
 using Mafi.Serialization;
@@ -61,6 +62,23 @@ public class ElevatedStationModule : TrainStationModule, ITrainTrackMayBeElevate
     ImmutableArray<TrainTrackPillarInfoRel> ITrainTrackMayBeElevatedFriend.GetTransformedPillarsData(Transform90RotFlip transform)
     {
         return ((ElevatedStationModuleProto)base.Prototype).GetTransformedPillarsData(transform);
+    }
+
+    // ── Never collapse from "uneven terrain" ──
+    // The station is held up by pillars, not by the ground beneath its footprint, so the
+    // terrain-stability monitor must not tear it down. Suppressing canCollapse also stops the
+    // "may collapse due to uneven terrain" warning before it appears.
+
+    public override void NotifyUnevenTerrain(Mafi.Collections.IReadOnlySet<int> groundVerticesViolatingConstraints,
+        int newIndex, bool wasAdded, out bool canCollapse)
+    {
+        canCollapse = false;
+    }
+
+    public override bool TryCollapseOnUnevenTerrain(Mafi.Collections.IReadOnlySet<int> groundVerticesViolatingConstraints,
+        EntityCollapseHelper collapseHelper)
+    {
+        return false;
     }
 
     // ── Serialization (mirrors the hand-written pattern used by other modded entities) ──
