@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Mafi;
 using Mafi.Core;
 using Mafi.Collections.ImmutableCollections;
@@ -47,6 +48,20 @@ public class ElevatedStationModuleProto : TrainStationModuleProto, ITrainTrackMa
             maxSpeedTilesPerTick, constructionDurationPerProduct, boostCost, cannotBeReflected,
             isProductSupportedOverride, isElectrified)
     {
+        // The station rests on its own footprint pillars, not on train-track pillars, so exempt
+        // its track from TrainTracksCollapseHelper's "missing support -> collapse" check (the only
+        // thing that reads IgnoreMissingSupport). It is a get-only auto-property set by the base
+        // constructor to false; flip its backing field to true here.
+        FieldInfo backing = typeof(EntityWithTrainTrackBaseProto).GetField(
+            "<IgnoreMissingSupport>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance);
+        if (backing != null)
+        {
+            backing.SetValue(this, true);
+        }
+        else
+        {
+            Log.Error("Elevation++: IgnoreMissingSupport backing field not found; elevated station may collapse.");
+        }
     }
 
     public T SelectBetweenElevatedAndGround<T>(TerrainManager terrainManager, TileTransform transform)
