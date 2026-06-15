@@ -113,16 +113,18 @@ internal class ElevatedStationData : IModData
 
     private static void combineUnderOneSlot(List<Proto> group, Dictionary<Proto, bool> isElectrified)
     {
-        if (group.Count == 0)
+        if (group.Count < 2)
         {
             return;
         }
-        // Non-electrified first so it is the default shown, electrified in the popup.
+        // Non-electrified first (tier I), electrified after (tier II). Link them into a tier chain
+        // — each higher tier's "next tier" is the one below — which is what makes the toolbar show
+        // them combined under one slot with the variants in the popup (same as the vanilla Stations
+        // tab). SetNextTier points from the higher tier down to the lower one.
         group.Sort((a, b) => isElectrified[a].CompareTo(isElectrified[b]));
-        var combine = new CombineUnderProtoParam(group[0]);
-        foreach (Proto p in group)
+        for (int i = 1; i < group.Count; i++)
         {
-            p.AddParam(combine);
+            ((IProtoWithUpgrade)group[i]).SetNextTier((IProtoWithUpgrade)group[i - 1]);
         }
     }
 
@@ -217,7 +219,7 @@ internal class ElevatedStationData : IModData
         setField(t, clone, "<Categories>k__BackingField", categoryArray);
         // Keep the vanilla IconPath the clone already copied: mark it custom so Initialize won't
         // overwrite it with a generated path for our (icon-less) new id.
-        if (!setField(t, clone, "<IconIsCustom>k__BackingField", true))
+        if (!setField(t, clone, "IconIsCustom", true))
         {
             Log.Warning("Elevation++: Gfx IconIsCustom field not found; elevated station icons may be missing.");
         }
