@@ -18,16 +18,16 @@ namespace ElevationPP.Stations;
 /// UsingPillar footprint, so it can be raised onto pillars like the elevated loading module.
 ///
 /// The root entity (<c>TrainStationRoot</c>) is sealed, so unlike the loading module this proto
-/// cannot supply an <see cref="ITrainTrackMayBeElevatedFriend"/> entity. That is fine: every
-/// friend access in the engine is guarded by an <c>is</c> check, so the root simply tracks no
-/// pillars of its own and is never collapse-checked by TrainTracksCollapseHelper. It is held up by
-/// its footprint pillars via <see cref="ILayoutEntityProtoWithElevation"/>.
+/// cannot supply an <see cref="ITrainTrackMayBeElevatedFriend"/> entity. Crucially, that means it
+/// must NOT implement <c>ITrainTrackMayBeElevatedProto</c>: the placement command routes any such
+/// proto through a path that casts the new entity to <c>ITrainTrackMayBeElevatedFriend</c> and
+/// rejects it ("entity is not elevated") when the cast fails. Instead the root is elevated purely
+/// as a layout entity on its footprint pillars via <see cref="ILayoutEntityProtoWithElevation"/>,
+/// like a balancer. It is never collapse-checked (only friends are), so it holds.
 /// </summary>
-public class ElevatedStationRootProto : TrainStationRootProto, ITrainTrackMayBeElevatedProto, ILayoutEntityProtoWithElevation
+public class ElevatedStationRootProto : TrainStationRootProto, ILayoutEntityProtoWithElevation
 {
     // EntityType is inherited as typeof(TrainStationRoot) — the sealed vanilla entity is reused.
-
-    public Option<ITrainTrackMayBeElevatedProto> ElevationFlippedProto => Option<ITrainTrackMayBeElevatedProto>.None;
 
     public bool CanBeElevated => true;
     public bool CanPillarsPassThrough => true;
@@ -44,11 +44,5 @@ public class ElevatedStationRootProto : TrainStationRootProto, ITrainTrackMayBeE
         FieldInfo backing = typeof(EntityWithTrainTrackBaseProto).GetField(
             "<IgnoreMissingSupport>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance);
         backing?.SetValue(this, true);
-    }
-
-    public T SelectBetweenElevatedAndGround<T>(TerrainManager terrainManager, TileTransform transform)
-        where T : class, ITrainTrackMayBeElevatedProto
-    {
-        return this as T;
     }
 }
