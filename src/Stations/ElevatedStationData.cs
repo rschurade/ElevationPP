@@ -49,7 +49,6 @@ internal class ElevatedStationData : IModData
         {
             Log.Error("Elevation++: Trains toolbar category not found; elevated stations have no tab.");
         }
-        ImmutableArray<ToolbarEntryData> categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, 110);
 
         TrainTrackTrajectoryData moduleTraj = makeElevatedTrajectory(registrator,
             new Vector2f(0, 0), new Vector2f(2, 0), new Vector2f(3, 0), new Vector2f(5, 0));
@@ -72,7 +71,7 @@ internal class ElevatedStationData : IModData
             {
                 continue;
             }
-            Proto p = registerElevatedModule(registrator, db, v, moduleTraj, categoryArray);
+            Proto p = registerElevatedModule(registrator, db, v, moduleTraj);
             if (p == null)
             {
                 continue;
@@ -91,7 +90,7 @@ internal class ElevatedStationData : IModData
             {
                 continue;
             }
-            Proto p = registerElevatedRoot(registrator, db, v, rootTraj, categoryArray);
+            Proto p = registerElevatedRoot(registrator, db, v, rootTraj);
             if (p == null)
             {
                 continue;
@@ -129,7 +128,7 @@ internal class ElevatedStationData : IModData
     }
 
     private Proto registerElevatedModule(ProtoRegistrator registrator, ProtosDb db, TrainStationModuleProto v,
-        TrainTrackTrajectoryData trajectory, ImmutableArray<ToolbarEntryData> categoryArray)
+        TrainTrackTrajectoryData trajectory)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
         Proto.Str strings = Proto.CreateStrFromLocalized(id, ELEVATED_PREFIX.Format(v.Strings.Name), v.Strings.DescShort);
@@ -137,7 +136,9 @@ internal class ElevatedStationData : IModData
             new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
                 tokenPostProcesssor: toUsingPillar),
             moduleFootprint(v));
-        var gfx = (TrainStationModuleProto.Gfx)cloneGfxWithCategory(v.Graphics, categoryArray);
+        // Mirror the module's order from the normal Stations tab so the elevated tab matches it.
+        var categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, vanillaOrder(v.Graphics.Categories, 115));
+        var gfx = (TrainStationModuleProto.Gfx)cloneGfxWithCategory(v.Graphics, vanillaIconPath(v), categoryArray);
         bool electrified = v.ElectrificationType != ElectrificationType.None;
 
         var proto = new ElevatedStationModuleProto(
@@ -148,7 +149,7 @@ internal class ElevatedStationData : IModData
     }
 
     private Proto registerElevatedRoot(ProtoRegistrator registrator, ProtosDb db, TrainStationRootProto v,
-        TrainTrackTrajectoryData trajectory, ImmutableArray<ToolbarEntryData> categoryArray)
+        TrainTrackTrajectoryData trajectory)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
         Proto.Str strings = Proto.CreateStrFromLocalized(id, ELEVATED_PREFIX.Format(v.Strings.Name), v.Strings.DescShort);
@@ -156,7 +157,10 @@ internal class ElevatedStationData : IModData
             new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
                 tokenPostProcesssor: toUsingPillar),
             "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]", "[5][5]");
-        var gfx = (EntityWithTrainTrackBaseProto.Gfx)cloneGfxWithCategory(v.Graphics, categoryArray);
+        // Root is the base building; keep it leftmost (lower order than any module), like the
+        // normal Stations tab where "Train station" comes first.
+        var categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, 100);
+        var gfx = (EntityWithTrainTrackBaseProto.Gfx)cloneGfxWithCategory(v.Graphics, vanillaIconPath(v), categoryArray);
         bool electrified = v.ElectrificationType != ElectrificationType.None;
 
         var proto = new ElevatedStationRootProto(
@@ -205,20 +209,38 @@ internal class ElevatedStationData : IModData
     }
 
     /// <summary>
-    /// Shallow-clones a proto Gfx, retargets its toolbar category to the new tab, and marks the icon
-    /// as custom so the proto's Initialize keeps the source proto's (already-resolved) icon path
-    /// instead of regenerating a missing one for the new id. The vanilla proto is untouched (it keeps
-    /// its own Gfx instance).
+    /// The source proto's generated icon path, reconstructed explicitly. We can't read
+    /// <c>v.Graphics.IconPath</c> here because the vanilla protos aren't initialized yet at mod
+    /// registration time (the path is set later), so it's still null.
     /// </summary>
-    private static object cloneGfxWithCategory(object vanillaGfx, ImmutableArray<ToolbarEntryData> categoryArray)
+    private static string vanillaIconPath(StaticEntityProto v)
+    {
+        return Proto.Gfx.GetGeneratedIconPathRoot(v) + "/LayoutEntity/" + v.Id + ".png";
+    }
+
+    /// <summary>The order of the first toolbar entry, or <paramref name="fallback"/>.</summary>
+    private static int vanillaOrder(ImmutableArray<ToolbarEntryData> cats, int fallback)
+    {
+        if (cats.IsNotEmpty && cats[0].Order.HasValue)
+        {
+            return cats[0].Order.Value;
+        }
+        return fallback;
+    }
+
+    /// <summary>
+    /// Shallow-clones a proto Gfx, retargets its toolbar category to the new tab, points it at the
+    /// source proto's icon, and marks the icon custom so the proto's Initialize won't overwrite it
+    /// with a (missing) generated path for the new id. The vanilla proto is untouched (separate Gfx).
+    /// </summary>
+    private static object cloneGfxWithCategory(object vanillaGfx, string iconPath, ImmutableArray<ToolbarEntryData> categoryArray)
     {
         object clone = typeof(object)
             .GetMethod("MemberwiseClone", BindingFlags.NonPublic | BindingFlags.Instance)
             .Invoke(vanillaGfx, null);
         Type t = clone.GetType();
         setField(t, clone, "<Categories>k__BackingField", categoryArray);
-        // Keep the vanilla IconPath the clone already copied: mark it custom so Initialize won't
-        // overwrite it with a generated path for our (icon-less) new id.
+        setField(t, clone, "<IconPath>k__BackingField", iconPath);
         if (!setField(t, clone, "IconIsCustom", true))
         {
             Log.Warning("Elevation++: Gfx IconIsCustom field not found; elevated station icons may be missing.");
