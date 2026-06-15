@@ -45,10 +45,15 @@ internal class ElevatedStationData : IModData
             return;
         }
 
-        // Building footprint — same tokens as the vanilla unit station, but with a widened
-        // placement-height range so it can be lifted off the ground.
+        // Building footprint — same tokens as the vanilla unit station, but:
+        //  - widened placement-height range so it can be lifted off the ground, and
+        //  - every non-port footprint tile is converted from a ground-anchored tile (which
+        //    fails "terrain too low" when raised) to a UsingPillar tile, so the
+        //    ILayoutEntityProtoWithElevation validator builds a support pillar under it instead.
         EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
-            new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, 16)),
+            new EntityLayoutParams(
+                customPlacementRange: new ThicknessIRange(0, 16),
+                tokenPostProcesssor: toUsingPillar),
             "   +A#   +B#   ",
             "[5][5][5][5][5]", "[5][5][5][5][5]", "[5][5][5][5][5]", "[5][5][5][5][5]",
             "[5][5][5][5][5]", "[5][5][5][5][5]", "[5][5][5][5][5]");
@@ -65,5 +70,20 @@ internal class ElevatedStationData : IModData
 
         db.Add(proto);
         Log.Info("Elevation++: registered elevated unit station.");
+    }
+
+    /// <summary>
+    /// Converts each non-port footprint tile from a ground-anchored tile to a UsingPillar tile
+    /// (dropping the terrain-height constraint that otherwise triggers "terrain too low" when the
+    /// station is raised). Port tiles are left untouched.
+    /// </summary>
+    private static LayoutTokenSpec toUsingPillar(RelTile2i coord, LayoutTokenSpec spec)
+    {
+        if (spec.IsPort)
+        {
+            return spec;
+        }
+        return new LayoutTokenSpec(spec.HeightFrom.Value, spec.HeightToExcl.Value,
+            LayoutTileConstraint.UsingPillar);
     }
 }

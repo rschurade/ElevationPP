@@ -23,11 +23,17 @@ namespace ElevationPP.Stations;
 /// <see cref="ElevationFlippedProto"/> is <c>None</c> and <see cref="SelectBetweenElevatedAndGround"/>
 /// always returns itself.
 /// </summary>
-public class ElevatedStationModuleProto : TrainStationModuleProto, ITrainTrackMayBeElevatedProto
+public class ElevatedStationModuleProto : TrainStationModuleProto, ITrainTrackMayBeElevatedProto, ILayoutEntityProtoWithElevation
 {
     public override Type EntityType => typeof(ElevatedStationModule);
 
     public Option<ITrainTrackMayBeElevatedProto> ElevationFlippedProto => Option<ITrainTrackMayBeElevatedProto>.None;
+
+    // ILayoutEntityProtoWithElevation — drives the transport-pillar support under the building
+    // footprint (UsingPillar tiles), exactly like balancers/lifts. The track itself is supported
+    // separately via the train-track pillar system (ITrainTrackMayBeElevatedProto above).
+    public bool CanBeElevated => true;
+    public bool CanPillarsPassThrough => true;
 
     public ElevatedStationModuleProto(ID id, Proto.Str strings, EntityLayout layout, EntityCosts costs,
         TrainTrackTrajectoryData trajectoryData, ProductType productType, Quantity capacity,
