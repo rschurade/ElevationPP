@@ -72,7 +72,11 @@ public sealed class ElevationPPMod : IMod
         JsonConfig.OnValueChanged += onConfigValueChanged;
     }
 
-    public void RegisterPrototypes(ProtoRegistrator registrator) { }
+    public void RegisterPrototypes(ProtoRegistrator registrator)
+    {
+        // Adds the "Elevated Unit Station" — a cargo station buildable on elevated track.
+        registrator.RegisterData<Stations.ElevatedStationData>();
+    }
 
     public void RegisterDependencies(DependencyResolverBuilder depBuilder, ProtosDb protosDb, bool gameWasLoaded)
     {
