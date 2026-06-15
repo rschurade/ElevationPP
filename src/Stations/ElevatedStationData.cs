@@ -10,6 +10,7 @@ using Mafi.Core.Entities.Animations;
 using Mafi.Core.Entities.Static;
 using Mafi.Core.Entities.Static.Layout;
 using Mafi.Core.Mods;
+using Mafi.Core.Products;
 using Mafi.Core.Prototypes;
 using Mafi.Core.Trains;
 using Mafi.Localization;
@@ -21,13 +22,10 @@ namespace ElevationPP.Stations;
 /// Registers elevated variants of the train stations. Rather than hard-coding each type, it
 /// iterates every existing station proto at runtime and clones it — so electrified, molten and any
 /// DLC variants are picked up automatically. Each clone gets an elevated track trajectory, a
-/// UsingPillar footprint, a widened placement-height range, and is filed under a new
-/// "Elevated stations" sub-tab next to Stations. The footprint is derived from each proto's own
-/// ports so the right belt/pipe/molten symbol is used.
-///
-/// Cargo modules use the friend entity <see cref="ElevatedStationModule"/>; the root keeps the
-/// vanilla sealed entity (see <see cref="ElevatedStationRootProto"/>). Fuel modules are a separate
-/// follow-up (two-port layout).
+/// UsingPillar footprint, a widened placement-height range, the source proto's own icon, and is
+/// filed under a new "Elevated stations" sub-tab next to Stations. Normal and electrified variants
+/// of the same type are combined under one toolbar slot (with the variants in its popup), just like
+/// the vanilla Stations tab.
 /// </summary>
 internal class ElevatedStationData : IModData
 {
@@ -40,7 +38,7 @@ internal class ElevatedStationData : IModData
     {
         ProtosDb db = registrator.PrototypesDb;
 
-        // 1. New "Elevated stations" sub-tab under the Trains category, next to Stations (order 1).
+        // 1. New "Elevated stations" sub-tab under the Trains category, next to Stations.
         if (db.TryGetProto<ToolbarCategoryProto>(Ids.ToolbarCategories.Trains, out var trainsCat))
         {
             db.Add(new ToolbarCategoryProto(ELEVATED_CATEGORY_ID,
@@ -53,7 +51,6 @@ internal class ElevatedStationData : IModData
         }
         ImmutableArray<ToolbarEntryData> categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, 110);
 
-        // 2. Elevated track trajectories: cargo modules use a 5-tile curve, the root a 2-tile one.
         TrainTrackTrajectoryData moduleTraj = makeElevatedTrajectory(registrator,
             new Vector2f(0, 0), new Vector2f(2, 0), new Vector2f(3, 0), new Vector2f(5, 0));
         TrainTrackTrajectoryData rootTraj = makeElevatedTrajectory(registrator,
@@ -63,30 +60,73 @@ internal class ElevatedStationData : IModData
             return;
         }
 
-        // 3. Clone every cargo module and root (materialize first so we don't iterate our own clones).
-        int modules = 0, roots = 0;
+        // 2. Clone every cargo module and root. Collect by group so normal/electrified variants of a
+        //    type can be combined into one toolbar slot afterwards.
+        var moduleGroups = new Dictionary<ProductType, List<Proto>>();
+        var rootGroup = new List<Proto>();
+        var isElectrified = new Dictionary<Proto, bool>();
+
         foreach (TrainStationModuleProto v in new List<TrainStationModuleProto>(db.All<TrainStationModuleProto>()))
         {
             if (v is ElevatedStationModuleProto)
             {
                 continue;
             }
-            registerElevatedModule(registrator, db, v, moduleTraj, categoryArray);
-            modules++;
+            Proto p = registerElevatedModule(registrator, db, v, moduleTraj, categoryArray);
+            if (p == null)
+            {
+                continue;
+            }
+            if (!moduleGroups.TryGetValue(v.ProductType, out var list))
+            {
+                moduleGroups[v.ProductType] = list = new List<Proto>();
+            }
+            list.Add(p);
+            isElectrified[p] = v.ElectrificationType != ElectrificationType.None;
         }
+
         foreach (TrainStationRootProto v in new List<TrainStationRootProto>(db.All<TrainStationRootProto>()))
         {
             if (v is ElevatedStationRootProto)
             {
                 continue;
             }
-            registerElevatedRoot(registrator, db, v, rootTraj, categoryArray);
-            roots++;
+            Proto p = registerElevatedRoot(registrator, db, v, rootTraj, categoryArray);
+            if (p == null)
+            {
+                continue;
+            }
+            rootGroup.Add(p);
+            isElectrified[p] = v.ElectrificationType != ElectrificationType.None;
         }
-        Log.Info($"Elevation++: registered elevated stations — {modules} module(s), {roots} root(s).");
+
+        // 3. Combine normal + electrified of each type under a single toolbar slot (popup variants).
+        foreach (var group in moduleGroups.Values)
+        {
+            combineUnderOneSlot(group, isElectrified);
+        }
+        combineUnderOneSlot(rootGroup, isElectrified);
+
+        Log.Info($"Elevation++: registered elevated stations — {isElectrified.Count} proto(s) in " +
+                 $"{moduleGroups.Count + 1} toolbar group(s).");
     }
 
-    private void registerElevatedModule(ProtoRegistrator registrator, ProtosDb db, TrainStationModuleProto v,
+    private static void combineUnderOneSlot(List<Proto> group, Dictionary<Proto, bool> isElectrified)
+    {
+        if (group.Count == 0)
+        {
+            return;
+        }
+        // Non-electrified first so it is the default shown, electrified in the popup.
+        group.Sort((a, b) => isElectrified[a].CompareTo(isElectrified[b]));
+        var combine = new CombineUnderProtoParam(group[0]);
+        foreach (Proto p in group)
+        {
+            p.AddParam(combine);
+        }
+    }
+
+    private Proto registerElevatedModule(ProtoRegistrator registrator, ProtosDb db, TrainStationModuleProto v,
         TrainTrackTrajectoryData trajectory, ImmutableArray<ToolbarEntryData> categoryArray)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
@@ -102,10 +142,10 @@ internal class ElevatedStationData : IModData
             id, strings, layout, v.Costs, trajectory, v.ProductType, v.Capacity, v.TransferPeriod,
             v.TransferQuantity, v.ConnectionCompletionPerStepWhenLoading, v.PowerConsumption,
             ((IProtoWithAnimation)v).AnimationParams, gfx, null, null, null, cannotBeReflected: false, null, electrified);
-        db.Add(proto);
+        return db.Add(proto);
     }
 
-    private void registerElevatedRoot(ProtoRegistrator registrator, ProtosDb db, TrainStationRootProto v,
+    private Proto registerElevatedRoot(ProtoRegistrator registrator, ProtosDb db, TrainStationRootProto v,
         TrainTrackTrajectoryData trajectory, ImmutableArray<ToolbarEntryData> categoryArray)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
@@ -120,7 +160,7 @@ internal class ElevatedStationData : IModData
         var proto = new ElevatedStationRootProto(
             id, strings, layout, v.Costs, trajectory, v.PowerConsumption, gfx,
             null, null, null, cannotBeReflected: false, electrified);
-        db.Add(proto);
+        return db.Add(proto);
     }
 
     /// <summary>
@@ -163,38 +203,39 @@ internal class ElevatedStationData : IModData
     }
 
     /// <summary>
-    /// Shallow-clones a proto Gfx and retargets its toolbar category to the given one, so the
-    /// elevated variant lands in the "Elevated stations" tab without disturbing the vanilla proto
-    /// (which shares the original Gfx instance).
+    /// Shallow-clones a proto Gfx, retargets its toolbar category to the new tab, and marks the icon
+    /// as custom so the proto's Initialize keeps the source proto's (already-resolved) icon path
+    /// instead of regenerating a missing one for the new id. The vanilla proto is untouched (it keeps
+    /// its own Gfx instance).
     /// </summary>
     private static object cloneGfxWithCategory(object vanillaGfx, ImmutableArray<ToolbarEntryData> categoryArray)
     {
         object clone = typeof(object)
             .GetMethod("MemberwiseClone", BindingFlags.NonPublic | BindingFlags.Instance)
             .Invoke(vanillaGfx, null);
-        FieldInfo categories = findField(clone.GetType(), "<Categories>k__BackingField");
-        if (categories != null)
+        Type t = clone.GetType();
+        setField(t, clone, "<Categories>k__BackingField", categoryArray);
+        // Keep the vanilla IconPath the clone already copied: mark it custom so Initialize won't
+        // overwrite it with a generated path for our (icon-less) new id.
+        if (!setField(t, clone, "<IconIsCustom>k__BackingField", true))
         {
-            categories.SetValue(clone, categoryArray);
-        }
-        else
-        {
-            Log.Warning("Elevation++: Gfx Categories backing field not found; elevated station may show in the wrong tab.");
+            Log.Warning("Elevation++: Gfx IconIsCustom field not found; elevated station icons may be missing.");
         }
         return clone;
     }
 
-    private static FieldInfo findField(Type t, string name)
+    private static bool setField(Type type, object target, string name, object value)
     {
-        for (; t != null; t = t.BaseType)
+        for (Type t = type; t != null; t = t.BaseType)
         {
             FieldInfo f = t.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
             if (f != null)
             {
-                return f;
+                f.SetValue(target, value);
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
     /// <summary>
