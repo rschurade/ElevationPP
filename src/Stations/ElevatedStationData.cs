@@ -74,6 +74,7 @@ internal class ElevatedStationData : IModData
         //    type can be combined into one toolbar slot afterwards.
         var moduleGroups = new Dictionary<ProductType, List<Proto>>();
         var rootGroup = new List<Proto>();
+        var fuelGroups = new Dictionary<ProductProto, List<Proto>>();
         var isElectrified = new Dictionary<Proto, bool>();
 
         foreach (TrainStationModuleProto v in new List<TrainStationModuleProto>(db.All<TrainStationModuleProto>()))
@@ -112,15 +113,43 @@ internal class ElevatedStationData : IModData
             isElectrified[p] = v.ElectrificationType != ElectrificationType.None;
         }
 
+        foreach (TrainStationFuelProto v in new List<TrainStationFuelProto>(db.All<TrainStationFuelProto>()))
+        {
+            if (v is ElevatedStationFuelProto)
+            {
+                continue;
+            }
+            protoToNode.TryGetValue(v, out var node);
+            Proto p = registerElevatedFuel(registrator, db, v, node);
+            if (p == null)
+            {
+                continue;
+            }
+            ProductProto fuelKey = firstFuelProduct(v);
+            if (fuelKey != null)
+            {
+                if (!fuelGroups.TryGetValue(fuelKey, out var list))
+                {
+                    fuelGroups[fuelKey] = list = new List<Proto>();
+                }
+                list.Add(p);
+            }
+            isElectrified[p] = v.ElectrificationType != ElectrificationType.None;
+        }
+
         // 3. Combine normal + electrified of each type under a single toolbar slot (popup variants).
         foreach (var group in moduleGroups.Values)
+        {
+            combineUnderOneSlot(group, isElectrified);
+        }
+        foreach (var group in fuelGroups.Values)
         {
             combineUnderOneSlot(group, isElectrified);
         }
         combineUnderOneSlot(rootGroup, isElectrified);
 
         Log.Info($"Elevation++: registered elevated stations — {isElectrified.Count} proto(s) in " +
-                 $"{moduleGroups.Count + 1} toolbar group(s).");
+                 $"{moduleGroups.Count + fuelGroups.Count + 1} toolbar group(s).");
     }
 
     private static void combineUnderOneSlot(List<Proto> group, Dictionary<Proto, bool> isElectrified)
@@ -193,6 +222,65 @@ internal class ElevatedStationData : IModData
             id, strings, layout, v.Costs, trajectory, v.PowerConsumption, gfx,
             null, null, null, cannotBeReflected: false, electrified);
         return addGated(db, proto, unlockedBy);
+    }
+
+    private Proto registerElevatedFuel(ProtoRegistrator registrator, ProtosDb db, TrainStationFuelProto v,
+        ResearchNodeProto unlockedBy)
+    {
+        var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
+        Proto.Str strings = Proto.CreateStrFromLocalized(id, ELEVATED_PREFIX.Format(v.Strings.Name), v.Strings.DescShort);
+
+        int w = v.Layout.LayoutSize.X;
+        TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
+            new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0));
+        if (trajectory == null)
+        {
+            return null;
+        }
+        EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
+            new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
+                tokenPostProcesssor: toUsingPillar),
+            footprintRows(v.Layout, () => fillGrid(w, 7)));
+        var categoryArray = registrator.GetCategoryToArray(ELEVATED_CATEGORY_ID, false, vanillaOrder(v.Graphics.Categories, 120));
+        var gfx = (TrainStationFuelProto.Gfx)cloneGfxWithCategory(v.Graphics, vanillaIconPath(v), categoryArray);
+        bool electrified = v.ElectrificationType != ElectrificationType.None;
+
+        var proto = new ElevatedStationFuelProto(
+            id, strings, layout, v.Costs, trajectory, v.TransferPeriod, v.PowerConsumption, v.AnimationParams,
+            gfx, null, null, null, cannotBeReflected: false, electrified, v.RequiresAlignment);
+
+        // A fuel station with no allowed fuels fails to initialize — copy them from the source proto.
+        foreach (TrainStationFuelProto.FuelDefinition def in v.AllowedFuels)
+        {
+            proto.AddFuel(def.PrimaryProduct, def.SecondaryProduct, def.WasteProduct);
+        }
+        return addGated(db, proto, unlockedBy);
+    }
+
+    /// <summary>The primary fuel product of a fuel station, used to group its normal/electrified variants.</summary>
+    private static ProductProto firstFuelProduct(TrainStationFuelProto v)
+    {
+        foreach (TrainStationFuelProto.FuelDefinition def in v.AllowedFuels)
+        {
+            return def.PrimaryProduct.Product;
+        }
+        return null;
+    }
+
+    /// <summary>A plain width x rows grid of [5] tiles (fallback footprint when no source string).</summary>
+    private static string[] fillGrid(int width, int rows)
+    {
+        var row = new System.Text.StringBuilder();
+        for (int i = 0; i < width; i++)
+        {
+            row.Append("[5]");
+        }
+        var result = new string[rows];
+        for (int i = 0; i < rows; i++)
+        {
+            result[i] = row.ToString();
+        }
+        return result;
     }
 
     /// <summary>
