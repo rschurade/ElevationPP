@@ -181,7 +181,7 @@ internal class ElevatedStationData : IModData
         int w = v.Layout.LayoutSize.X;
         TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
             new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0),
-            trackOffsetOf(v.TrajectoryData));
+            trackOffsetFor(v));
         if (trajectory == null)
         {
             return null;
@@ -234,7 +234,7 @@ internal class ElevatedStationData : IModData
         int w = v.Layout.LayoutSize.X;
         TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
             new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0),
-            trackOffsetOf(v.TrajectoryData));
+            trackOffsetFor(v));
         if (trajectory == null)
         {
             return null;
@@ -356,13 +356,13 @@ internal class ElevatedStationData : IModData
     }
 
     /// <summary>
-    /// The source station's own track offset (where the track sits relative to the building). Read
-    /// from the vanilla trajectory's first waypoint rather than assumed, because some stations (e.g.
-    /// nuclear fuel, offset -5) place the track further from the building than the usual -2.
+    /// The track offset (how far the track sits in front of the building). Almost every station uses
+    /// -2; the nuclear fuel station is the lone exception at -5 (it places the track further out).
     /// </summary>
-    private static RelTile2f trackOffsetOf(TrainTrackTrajectoryData traj)
+    private static RelTile2f trackOffsetFor(StaticEntityProto v)
     {
-        return traj != null && traj.Waypoints.IsNotEmpty ? traj.Waypoints[0].Position.Xy : new RelTile2f(0, -2);
+        int y = v.Id.ToString().Contains("Nuclear") ? -5 : -2;
+        return new RelTile2f(0, y);
     }
 
     /// <summary>
