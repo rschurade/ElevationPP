@@ -53,7 +53,7 @@ internal class ElevatedStationData : IModData
         }
 
         TrainTrackTrajectoryData rootTraj = makeElevatedTrajectory(registrator,
-            new Vector2f(0, 0), new Vector2f(1, 0), new Vector2f(1, 0), new Vector2f(2, 0));
+            new Vector2f(0, 0), new Vector2f(1, 0), new Vector2f(1, 0), new Vector2f(2, 0), new RelTile2f(0, -2));
         if (rootTraj == null)
         {
             return;
@@ -180,7 +180,8 @@ internal class ElevatedStationData : IModData
         // the wrong width so they don't join a station group. The elevated track spans that width.
         int w = v.Layout.LayoutSize.X;
         TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
-            new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0));
+            new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0),
+            trackOffsetOf(v.TrajectoryData));
         if (trajectory == null)
         {
             return null;
@@ -232,7 +233,8 @@ internal class ElevatedStationData : IModData
 
         int w = v.Layout.LayoutSize.X;
         TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
-            new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0));
+            new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0),
+            trackOffsetOf(v.TrajectoryData));
         if (trajectory == null)
         {
             return null;
@@ -339,18 +341,28 @@ internal class ElevatedStationData : IModData
     }
 
     private TrainTrackTrajectoryData makeElevatedTrajectory(ProtoRegistrator registrator,
-        Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3)
+        Vector2f p0, Vector2f p1, Vector2f p2, Vector2f p3, RelTile2f trackOffset)
     {
         var curve = new CubicBezierCurve2f(ImmutableArray.Create(p0, p1, p2, p3));
         if (!TrainTrackTrajectoryData.TryCreateFromCurve(0, curve, isElevated: true,
                 registrator.LayoutParser.SomeOption(), out var traj, out _, out var error,
                 default(ThicknessTilesF), default(ThicknessTilesF), TrainTrackGradeFactor.G0,
-                TrainTrackGradeFactor.G0, null, null, new RelTile2f(0, -2), default(RelTile2f), null, false))
+                TrainTrackGradeFactor.G0, null, null, trackOffset, default(RelTile2f), null, false))
         {
             Log.Error("Elevation++: failed to create elevated station trajectory: " + error);
             return null;
         }
         return traj;
+    }
+
+    /// <summary>
+    /// The source station's own track offset (where the track sits relative to the building). Read
+    /// from the vanilla trajectory's first waypoint rather than assumed, because some stations (e.g.
+    /// nuclear fuel, offset -5) place the track further from the building than the usual -2.
+    /// </summary>
+    private static RelTile2f trackOffsetOf(TrainTrackTrajectoryData traj)
+    {
+        return traj != null && traj.Waypoints.IsNotEmpty ? traj.Waypoints[0].Position.Xy : new RelTile2f(0, -2);
     }
 
     /// <summary>
