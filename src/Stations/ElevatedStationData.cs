@@ -50,11 +50,9 @@ internal class ElevatedStationData : IModData
             Log.Error("Elevation++: Trains toolbar category not found; elevated stations have no tab.");
         }
 
-        TrainTrackTrajectoryData moduleTraj = makeElevatedTrajectory(registrator,
-            new Vector2f(0, 0), new Vector2f(2, 0), new Vector2f(3, 0), new Vector2f(5, 0));
         TrainTrackTrajectoryData rootTraj = makeElevatedTrajectory(registrator,
             new Vector2f(0, 0), new Vector2f(1, 0), new Vector2f(1, 0), new Vector2f(2, 0));
-        if (moduleTraj == null || rootTraj == null)
+        if (rootTraj == null)
         {
             return;
         }
@@ -71,7 +69,7 @@ internal class ElevatedStationData : IModData
             {
                 continue;
             }
-            Proto p = registerElevatedModule(registrator, db, v, moduleTraj);
+            Proto p = registerElevatedModule(registrator, db, v);
             if (p == null)
             {
                 continue;
@@ -127,15 +125,25 @@ internal class ElevatedStationData : IModData
         }
     }
 
-    private Proto registerElevatedModule(ProtoRegistrator registrator, ProtosDb db, TrainStationModuleProto v,
-        TrainTrackTrajectoryData trajectory)
+    private Proto registerElevatedModule(ProtoRegistrator registrator, ProtosDb db, TrainStationModuleProto v)
     {
         var id = new StaticEntityProto.ID("ElevationPP_Elev_" + v.Id);
         Proto.Str strings = Proto.CreateStrFromLocalized(id, ELEVATED_PREFIX.Format(v.Strings.Name), v.Strings.DescShort);
+
+        // Reuse the module's OWN footprint and width, not a fixed 5-wide guess — otherwise wider
+        // modules (e.g. the 10-wide molten station) get under-covered, clip neighbours, and report
+        // the wrong width so they don't join a station group. The elevated track spans that width.
+        int w = v.Layout.LayoutSize.X;
+        TrainTrackTrajectoryData trajectory = makeElevatedTrajectory(registrator,
+            new Vector2f(0, 0), new Vector2f(w / 3, 0), new Vector2f(2 * w / 3, 0), new Vector2f(w, 0));
+        if (trajectory == null)
+        {
+            return null;
+        }
         EntityLayout layout = registrator.LayoutParser.ParseLayoutOrThrow(
             new EntityLayoutParams(customPlacementRange: new ThicknessIRange(0, PLACEMENT_HEIGHT_MAX),
                 tokenPostProcesssor: toUsingPillar),
-            moduleFootprint(v));
+            footprintRows(v.Layout, () => moduleFootprint(v)));
         // Mirror the module's order from the normal Stations tab; keep molten last as requested
         // (its DLC toolbar order otherwise lands it near the front).
         int order = v.Id.ToString().Contains("Molten") ? 200 : vanillaOrder(v.Graphics.Categories, 115);
@@ -172,8 +180,19 @@ internal class ElevatedStationData : IModData
     }
 
     /// <summary>
-    /// The building footprint for a cargo module: a 5x7 grid of [5] tiles, with the two cargo ports
-    /// in the first row using the proto's own port symbol (# conveyor, ~ loose, @ pipe, molten, …).
+    /// The exact building-footprint rows of a layout, taken from its original source string (rows
+    /// are stored joined by '\n'). This preserves the real size, shape and port positions of any
+    /// module. Falls back to <paramref name="fallback"/> if the source string isn't available.
+    /// </summary>
+    private static string[] footprintRows(EntityLayout layout, Func<string[]> fallback)
+    {
+        string src = layout.SourceLayoutStr;
+        return string.IsNullOrEmpty(src) ? fallback() : src.Split('\n');
+    }
+
+    /// <summary>
+    /// Fallback footprint for a cargo module: a 5x7 grid of [5] tiles, with the two cargo ports in
+    /// the first row using the proto's own port symbol (# conveyor, ~ loose, @ pipe, molten, …).
     /// Modules with no ports (the empty module) use the vanilla empty footprint.
     /// </summary>
     private static string[] moduleFootprint(TrainStationModuleProto v)
