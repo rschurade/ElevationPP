@@ -1,0 +1,30 @@
+{
+  "RailPillarMaxHeight": {
+    "default": 16,
+    "is_integer": true,
+    "min": 6,
+    "max": 30,
+    "description": "Maximum height of elevated train-track pillars, in tiles (vanilla: 6). Also raises the rail build cursor cap. Do not lower this below the height of rail pillars already built or they may collapse."
+  },
+  "RailPillarSupportDistance": {
+    "default": 14,
+    "is_integer": true,
+    "min": 7,
+    "max": 56,
+    "description": "Maximum distance, in tiles, that elevated track may be from a supporting pillar (vanilla: 7). Auto-built rail pillars end up roughly twice this far apart. Do not lower this below what existing tracks use or they may collapse."
+  },
+  "TransportPillarMaxHeight": {
+    "default": 16,
+    "is_integer": true,
+    "min": 6,
+    "max": 30,
+    "description": "Maximum height of elevated pipe/belt pillars, in tiles (vanilla: 6). Also raises the pipe/belt build cursor cap. Do not lower this below the height of transport pillars already built or they may collapse."
+  },
+  "TransportPillarSupportDistance": {
+    "default": 8,
+    "is_integer": true,
+    "min": 4,
+    "max": 32,
+    "description": "Maximum distance, in tiles, that an elevated pipe or belt may be from a supporting pillar (vanilla: 4). Auto-built transport pillars end up roughly twice this far apart. Do not lower this below what existing pipes/belts use or they may collapse."
+  }
+}

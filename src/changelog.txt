@@ -1,0 +1,32 @@
+Elevation++ — Changelog
+================================
+
+v1.0.0
+------
+Initial release (formerly "Elevated Rails Plus", now extended to pipes
+and belts):
+
+Train tracks (rails):
+- Pillar height limit raised from 6 to 16 tiles (configurable up to 30
+  via RailPillarMaxHeight). This also lifts the rail build cursor's
+  up-arrow cap.
+- Maximum distance between elevated track and its supporting pillar
+  raised from 7 to 14 tiles (configurable up to 56 via
+  RailPillarSupportDistance). Auto-built pillars are placed roughly
+  twice this value apart.
+- Rendering fix for rail pillars taller than the vanilla tower mesh:
+  the mod stacks additional column segments down to the ground so tall
+  pillars no longer show a gap (Harmony patch on the pillar renderer).
+
+Pipes and belts (transports):
+- Pillar height limit raised from 6 to 16 tiles (configurable up to 30
+  via TransportPillarMaxHeight). This also lifts the pipe/belt build
+  cursor's up-arrow cap.
+- Maximum distance between an elevated pipe/belt and its supporting
+  pillar raised from 4 to 8 tiles (configurable up to 32 via
+  TransportPillarSupportDistance), so auto-built pillars are placed
+  roughly twice as far apart. Transport pillars are drawn tile-by-tile,
+  so they extend to the new heights with no rendering work needed.
+
+All four values are editable in the in-game mod settings and changes
+apply immediately.

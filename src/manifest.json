@@ -1,0 +1,14 @@
+{
+  "id": "ElevationPP",
+  "version": "1.0.0",
+  "display_name": "Elevation++",
+  "description_short": "Taller pillars and longer spans for elevated rails, pipes and belts. All limits configurable.",
+  "description_long": "Raises the height and pillar-spacing limits of elevated structures. Train tracks: pillars up to 16 tiles tall (vanilla 6) and track up to 14 tiles from a supporting pillar (vanilla 7). Pipes and belts: pillars up to 16 tiles tall (vanilla 6) and transport up to 8 tiles from a pillar (vanilla 4), so auto-built pillars are placed roughly twice as far apart. All four values are configurable in the mod settings (RailPillarMaxHeight, RailPillarSupportDistance, TransportPillarMaxHeight, TransportPillarSupportDistance) and changes apply immediately. Warning: if you remove the mod (or lower the values) after building structures that exceed the vanilla limits, those structures will be considered unsupported and may collapse.",
+  "authors": "Roest",
+  "primary_dlls": [ "0Harmony.dll", "ElevationPP.dll" ],
+  "non_locking_dll_load": true,
+  "can_add_to_saved_game": true,
+  "can_remove_from_saved_game": true,
+  "min_game_version": "0.8.5",
+  "max_verified_game_version": "0.8.5"
+}
