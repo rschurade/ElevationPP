@@ -1,6 +1,18 @@
 Elevation++ — Changelog
 ================================
 
+v0.9.2
+------
+- Elevated belts/pipes can now be held up by the supported connectors
+  (balancers, mini-zippers, machine ports) at their ends. A short
+  segment spanning between two connectors no longer requires its own
+  pillar, so the auto-placed pillar there can be removed and the segment
+  stays up instead of collapsing. Only self-supported structures count
+  as anchors (not bare belt-to-belt junctions), and the normal support
+  distance still applies between the two anchors, so longer spans still
+  need a pillar. (The game still auto-places that pillar when you build;
+  this only lets you remove it.)
+
 v0.9.1
 ------
 - The auto-built support pillars under elevated stations now render as a

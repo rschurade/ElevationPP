@@ -109,6 +109,17 @@ public sealed class ElevationPPMod : IMod
         {
             Log.Error($"Elevation++: Failed to apply elevated station electrification patch: {ex.Message}");
         }
+
+        // Lets an elevated belt/pipe be held by the supported connectors at its ends, so the pillar
+        // in a short segment between two connectors is no longer mandatory and can be removed.
+        try
+        {
+            ConnectorPillarSupportPatch.TryApply();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Elevation++: Failed to apply connector-supported transport patch: {ex.Message}");
+        }
     }
 
     public void MigrateJsonConfig(VersionSlim savedVersion, Dict<string, object> savedValues) { }
